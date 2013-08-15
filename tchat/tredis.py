@@ -991,6 +991,7 @@ class Client(object):
     def publish(self, channel, message):
         return self.exe_command('PUBLISH', channel, message)
 
+    @tulip.task
     def listen(self, callback=None):
         if callback:
             def error_wrapper(e):
