@@ -13,6 +13,8 @@ from tornado import gen
 
 from tornadoredis.exceptions import RequestError, ConnectionError, ResponseError
 from tornadoredis.connection import Connection
+import tulip
+from core import CallbackFuture
 
 
 log = logging.getLogger('tornadoredis.client')
@@ -308,8 +310,8 @@ class Client(object):
             else:
                 self.connection.connect()
 
-    @gen.engine
-    def disconnect(self, callback=None):
+    @tulip.coroutine
+    def disconnect(self):
         """
         Disconnects from the Redis server.
         """
@@ -318,14 +320,12 @@ class Client(object):
             pool = self._connection_pool
             if pool:
                 pool.release(connection)
-                yield gen.Task(connection.wait_until_ready)
+                yield from CallbackFuture(connection.wait_until_ready)
                 proxy = pool.make_proxy(client_proxy=self._weak,
                                         connected=False)
                 self.connection = proxy
             else:
                 self.connection.disconnect()
-        if callback:
-            callback(False)
 
     #### formatting
     def encode(self, value):
@@ -359,7 +359,7 @@ class Client(object):
         return res
     
     ####
-    @gen.coroutine
+    @tulip.coroutine
     def exe_command(self, cmd, *args, **kwargs):
         result = None
         
@@ -376,19 +376,19 @@ class Client(object):
                 self.connection.connect()
 
             if not self.connection.ready():
-                yield gen.Task(self.connection.wait_until_ready)
+                yield from CallbackFuture(self.connection.wait_until_ready)
 
             if not self.subscribed and cmd not in ('AUTH', 'SELECT'):
                 if (self.password and
                     self.connection.info.get('pass', None) != self.password):
-                    yield gen.Task(self.auth, self.password)
+                    yield from CallbackFuture(self.auth, self.password)
                 if (self.selected_db and
                     self.connection.info.get('db', None) != self.selected_db):
-                    yield gen.Task(self.select, self.selected_db)
+                    yield from CallbackFuture(self.select, self.selected_db)
 
             command = self.format_command(cmd, *args, **kwargs)
             try:
-                yield gen.Task(self.connection.write, command)
+                yield from CallbackFuture(self.connection.write, command)
             except Exception as e:
                 self.connection.disconnect()
                 if not n_tries:
@@ -402,14 +402,14 @@ class Client(object):
                 break
             else:
                 result = None
-                data = yield gen.Task(self.connection.readline)
+                data = yield from CallbackFuture(self.connection.readline)
                 if not data:
                     if not n_tries:
                         raise ConnectionError('no data received')
                 else:
-                    resp = self.process_data(data, cmd_line)
+                    resp = yield from self.process_data(data, cmd_line)
                     if isinstance(resp, partial):
-                        resp = yield gen.Task(resp)
+                        resp = yield from CallbackFuture(resp)
                     result = self.format_reply(cmd_line, resp)
                     break
 
@@ -418,83 +418,18 @@ class Client(object):
 
         return result
 
-    @gen.engine
-    def execute_command(self, cmd, *args, **kwargs):
-        result = None
-        
-        raise Exception("test error")
-    
-        callback = kwargs.get('callback', None)
-        del kwargs['callback']
-        cmd_line = CmdLine(cmd, *args, **kwargs)
-        if self.subscribed and cmd not in PUB_SUB_COMMANDS:
-            callback(RequestError(
-                'Calling not pub/sub command during subscribed state',
-                cmd_line))
-            return
-
-        n_tries = 2
-        while n_tries > 0:
-            n_tries -= 1
-            if not self.connection.connected():
-                self.connection.connect()
-
-            if not self.connection.ready():
-                yield gen.Task(self.connection.wait_until_ready)
-
-            if not self.subscribed and cmd not in ('AUTH', 'SELECT'):
-                if (self.password and
-                    self.connection.info.get('pass', None) != self.password):
-                    yield gen.Task(self.auth, self.password)
-                if (self.selected_db and
-                    self.connection.info.get('db', None) != self.selected_db):
-                    yield gen.Task(self.select, self.selected_db)
-
-            command = self.format_command(cmd, *args, **kwargs)
-            try:
-                yield gen.Task(self.connection.write, command)
-            except Exception as e:
-                self.connection.disconnect()
-                if not n_tries:
-                    raise e
-                else:
-                    continue
-
-            if ((cmd in PUB_SUB_COMMANDS) or
-                (self.subscribed and cmd == 'PUBLISH')):
-                result = True
-                break
-            else:
-                result = None
-                data = yield gen.Task(self.connection.readline)
-                if not data:
-                    if not n_tries:
-                        raise ConnectionError('no data received')
-                else:
-                    resp = self.process_data(data, cmd_line)
-                    if isinstance(resp, partial):
-                        resp = yield gen.Task(resp)
-                    result = self.format_reply(cmd_line, resp)
-                    result = isinstance(result, bytes) and result.decode('utf-8')
-                    break
-
-        if cmd not in ('AUTH', 'SELECT'):
-            self.connection.execute_pending_command()
-
-        if callback:
-            callback(result)
-
-    @gen.engine
+    @tulip.coroutine
     def _consume_bulk(self, tail, callback=None):
-        response = yield gen.Task(self.connection.read, int(tail) + 2)
+        response = yield from CallbackFuture(self.connection.read, int(tail) + 2)
         if isinstance(response, Exception):
             raise response
         if not response:
             raise ResponseError('EmptyResponse')
         else:
             response = response[:-2]
-        callback(response)
-
+        return response
+    
+    @tulip.coroutine
     def process_data(self, data, cmd_line):
         data = data[:-2]  # strip \r\n
 
@@ -506,9 +441,9 @@ class Client(object):
             head, tail = data[0], data[1:]
 
             if head == ord('*'):
-                return partial(self.consume_multibulk, int(tail), cmd_line)
+                return self.consume_multibulk(int(tail), cmd_line)
             elif head == ord('$'):
-                return partial(self._consume_bulk, tail)
+                return self._consume_bulk(tail)
             elif head == ord('+'):
                 response = tail
             elif head == ord(':'):
@@ -522,24 +457,22 @@ class Client(object):
                                     cmd_line)
         return response
 
-    @gen.engine
+    @tulip.coroutine
     def consume_multibulk(self, length, cmd_line, callback=None):
         tokens = []
         while len(tokens) < length:
-            data = yield gen.Task(self.connection.readline)
+            data = yield from CallbackFuture(self.connection.readline)
             if not data:
                 raise ResponseError(
                     'Not enough data in response to %s, accumulated tokens: %s'
                     % (cmd_line, tokens),
                     cmd_line)
-            token = self.process_data(data, cmd_line)
-            if isinstance(token, partial):
-                token = yield gen.Task(token)
+            token = yield from self.process_data(data, cmd_line)
             tokens.append(token)
 
-        callback(tokens)
+        return tokens
 
-    ### MAINTENANCE
+    # ## MAINTENANCE
     def bgrewriteaof(self, callback=None):
         self.execute_command('BGREWRITEAOF', callback=callback)
 
@@ -559,9 +492,9 @@ class Client(object):
         self.execute_command('OBJECT', infotype, key, callback=callback)
 
     def info(self, section_name=None, callback=None):
-        args = ('INFO', )
+        args = ('INFO',)
         if section_name:
-            args += (section_name, )
+            args += (section_name,)
         self.execute_command(*args, callback=callback)
 
     def echo(self, value, callback=None):
@@ -605,7 +538,7 @@ class Client(object):
         elif callback:
             callback(True)
 
-    ### BASIC KEY COMMANDS
+    # ## BASIC KEY COMMANDS
     def append(self, key, value, callback=None):
         self.execute_command('APPEND', key, value, callback=callback)
 
@@ -764,7 +697,7 @@ class Client(object):
         kwargs = {'callback': kwargs.get('callback', None)}
         self.execute_command('BITOP', operation, dest, *keys, **kwargs)
 
-    ### COUNTERS COMMANDS
+    # ## COUNTERS COMMANDS
     def incr(self, key, callback=None):
         self.execute_command('INCR', key, callback=callback)
 
@@ -780,7 +713,7 @@ class Client(object):
     def decrby(self, key, amount, callback=None):
         self.execute_command('DECRBY', key, amount, callback=callback)
 
-    ### LIST COMMANDS
+    # ## LIST COMMANDS
     def blpop(self, keys, timeout=0, callback=None):
         tokens = to_list(keys)
         tokens.append(timeout)
@@ -842,7 +775,7 @@ class Client(object):
     def rpoplpush(self, src, dst, callback=None):
         self.execute_command('RPOPLPUSH', src, dst, callback=callback)
 
-    ### SET COMMANDS
+    # ## SET COMMANDS
     def sadd(self, key, *values, **kwargs):
         callback = kwargs.get('callback', None)
         self.execute_command('SADD', key, *values, callback=callback)
@@ -890,7 +823,7 @@ class Client(object):
     def sdiffstore(self, keys, dst, callback=None):
         self.execute_command('SDIFFSTORE', dst, *keys, callback=callback)
 
-    ### SORTED SET COMMANDS
+    # ## SORTED SET COMMANDS
     def zadd(self, key, *score_value, **kwargs):
         callback = kwargs.get('callback', None)
         self.execute_command('ZADD', key, *score_value, callback=callback)
@@ -982,7 +915,7 @@ class Client(object):
             tokens.append(aggregate)
         self.execute_command(command, *tokens, callback=callback)
 
-    ### HASH COMMANDS
+    # ## HASH COMMANDS
     def hgetall(self, key, callback=None):
         self.execute_command('HGETALL', key, callback=callback)
 
@@ -1026,7 +959,7 @@ class Client(object):
     def hvals(self, key, callback=None):
         self.execute_command('HVALS', key, callback=callback)
 
-    ### PUBSUB
+    # ## PUBSUB
     def subscribe(self, channels):
         return self._subscribe('SUBSCRIBE', channels)
 
@@ -1056,30 +989,9 @@ class Client(object):
         return result
 
     def publish(self, channel, message):
-        return self.exe_command('PUBLISHe', channel, message)
+        return self.exe_command('PUBLISH', channel, message)
 
-    @gen.engine
     def listen(self, callback=None):
-        """
-        Starts a Pub/Sub channel listening loop.
-        Use the unsubscribe or punsubscribe methods to exit it.
-
-        Each received message triggers the callback function.
-
-        Callback function receives a Message object instance as argument.
-
-        Here is an example of handling a channel subscription::
-
-            def handle_message(msg):
-                if msg.kind == 'message':
-                    print msg.body
-                elif msg.kind == 'disconnect':
-                    # Disconnected from the redis server
-                    pass
-
-            yield client.subscribe('channel_name')
-            client.listen(handle_message)
-        """
         if callback:
             def error_wrapper(e):
                 if isinstance(e, GeneratorExit):
@@ -1089,7 +1001,7 @@ class Client(object):
 
             cmd_listen = CmdLine('LISTEN')
             while self.subscribed:
-                data = yield gen.Task(self.connection.readline)
+                data = yield from CallbackFuture(self.connection.readline)
                 if isinstance(data, Exception):
                     raise data
 
@@ -1097,12 +1009,10 @@ class Client(object):
                     # Disconnected from a server
                     self.subscribed = False
                     # Notify a calling
-                    callback(reply_pubsub_message(('disconnect', )))
+                    callback(reply_pubsub_message(('disconnect',)))
                     return
 
-                response = self.process_data(data, cmd_listen)
-                if isinstance(response, partial):
-                    response = yield gen.Task(response)
+                response = yield from self.process_data(data, cmd_listen)
                 if isinstance(response, Exception):
                     raise response
 
@@ -1113,7 +1023,7 @@ class Client(object):
                 and result.body == 0:
                     self.subscribed = False
 
-    ### CAS
+    # ## CAS
     def watch(self, *key_names, **kwargs):
         callback = kwargs.get('callback', None)
         self.execute_command('WATCH', *key_names, callback=callback)
@@ -1121,7 +1031,7 @@ class Client(object):
     def unwatch(self, callback=None):
         self.execute_command('UNWATCH', callback=callback)
 
-    ### SCRIPTING COMMANDS
+    # ## SCRIPTING COMMANDS
     def eval(self, script, keys=None, args=None, callback=None):
         if keys is None:
             keys = []
@@ -1207,8 +1117,8 @@ class Pipeline(Client):
         self.executing = True
         try:
             if self.transactional:
-                command_stack = ([CmdLine('MULTI')] +
-                                 command_stack +
+                command_stack = ([CmdLine('MULTI')] + 
+                                 command_stack + 
                                  [CmdLine('EXEC')])
 
             request = self.format_pipeline_request(command_stack)
