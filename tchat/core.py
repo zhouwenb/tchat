@@ -1,8 +1,6 @@
 import tulip
 import collections
-from tulip import Task
-from tulip import futures
-import inspect
+
 Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
 
 class CallbackFuture(tulip.Future):
@@ -20,17 +18,12 @@ class CallbackFuture(tulip.Future):
             kwargs["callback"] = callback
         func(*args, **kwargs)
 
-def task(func):
-    """Decorator for a coroutine to be wrapped in a Task."""
-    if inspect.isgeneratorfunction(func):
-        coro = func
-    else:
-        def coro(*args, **kw):
-            res = func(*args, **kw)
-            if isinstance(res, futures.Future) or inspect.isgenerator(res):
-                res = yield from res
-            return res
 
+def force_result(func):
     def task_wrapper(*args, **kwds):
-        return Task(coro(*args, **kwds))
+        ret=func(*args, **kwds)
+        if isinstance(ret, tulip.futures.Future):
+            ret.add_done_callback(lambda future:future.result())
+        return ret
+
     return task_wrapper
