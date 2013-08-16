@@ -1,22 +1,23 @@
-from core import force_result
+import tcomp
 import config
 import tornado.websocket
-import tredis
 import tulip
+import uuid
 
 redis_server = config.redis_server
 
-rc = tredis.Client(**redis_server)
+rc = tcomp.redis.Client(**redis_server)
 rc.connect()
 
 class Member(object):
-    def __init__(self, handler):
+    def __init__(self, handler, uid):
         super(Member, self).__init__()
         self.handler = handler
+        self.uid = uid
     
     @tulip.coroutine    
     def start_listen(self):
-        self.client = tredis.Client(**redis_server)
+        self.client = tcomp.redis.Client(**redis_server)
         self.client.connect()
         yield from self.client.subscribe("main")
         print("init finished")
@@ -36,20 +37,20 @@ class Member(object):
         
 class ChatHandler(tornado.websocket.WebSocketHandler):
     
-    @force_result
+    @tcomp.force_result
     @tulip.task
     def open(self):
         self.write_message("hello")
-        self.member = Member(self);
+        uid=uuid.uuid4().hex
+        self.member = Member(self,uid);
         yield from self.member.start_listen()
 
-    @force_result
+    @tcomp.force_result
     @tulip.task    
     def on_message(self, message):
-        self.write_message("echo: %s" % message) 
-        yield from rc.publish("main", message)
+        yield from rc.publish("main", "%s says: %s" % (self.member.uid, message))
 
-    @force_result
+    @tcomp.force_result
     @tulip.task
     def on_close(self):
         yield from self.member.disconnect()

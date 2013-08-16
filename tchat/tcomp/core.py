@@ -1,12 +1,41 @@
+from tornado import stack_context
+from tornado.ioloop import IOLoop
+import collections
 import datetime
 import functools
 import os
- 
-import tulip.events
- 
-from tornado.ioloop import IOLoop
-from tornado import stack_context
- 
+import tulip
+
+Arguments = collections.namedtuple('Arguments', ['args', 'kwargs'])
+
+def ioloop():
+    return IOLoop.instance()
+
+def force_result(func):
+    def task_wrapper(*args, **kwds):
+        ret=func(*args, **kwds)
+        if isinstance(ret, tulip.Future):
+            ret.add_done_callback(lambda future:future.result())
+        return ret
+
+    return task_wrapper
+
+class CallbackFuture(tulip.Future):
+    def __init__(self, func, *args, **kwargs):
+        super(CallbackFuture, self).__init__()
+        def callback(*args_cb, **kwargs_cb):
+            if kwargs_cb or len(args_cb) > 1:
+                result = Arguments(args_cb, kwargs_cb)
+            elif args_cb:
+                result = args_cb[0]
+            else:
+                result = None
+            self.set_result(result)
+        if not "callback" in kwargs:
+            kwargs["callback"] = callback
+        func(*args, **kwargs)
+
+
 class TulipIOLoop(IOLoop):
     def initialize(self):
         self.tulip_loop = tulip.events.get_event_loop()

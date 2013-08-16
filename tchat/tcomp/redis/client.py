@@ -14,8 +14,7 @@ from tornado import gen
 from tornadoredis.exceptions import RequestError, ConnectionError, ResponseError
 from tornadoredis.connection import Connection
 import tulip
-from core import CallbackFuture
-
+from tcomp import CallbackFuture
 
 log = logging.getLogger('tornadoredis.client')
 
@@ -327,20 +326,12 @@ class Client(object):
             else:
                 self.connection.disconnect()
 
-    #### formatting
-    def encode(self, value):
-        if isinstance(value, str):
-            return value
-        elif isinstance(value, str):
-            return value.encode('utf-8')
-        return str(value)
-
     def format_command(self, *tokens, **kwargs):
         cmds = []
         for t in tokens:
-            e_t = self.encode(t)
-            cmds.append('$%s\r\n%s\r\n' % (len(e_t), e_t))
-        return ('*%s\r\n%s' % (len(tokens), ''.join(cmds))).encode('iso-8859-1')
+            e_t = t.encode('utf-8')
+            cmds.append('$%s\r\n%s\r\n' % (len(e_t), t))
+        return ('*%s\r\n%s' % (len(tokens), ''.join(cmds))).encode('utf-8')
 
     def format_reply(self, cmd_line, data):
         if isinstance(data, Exception):
