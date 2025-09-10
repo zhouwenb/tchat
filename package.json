@@ -1,0 +1,42 @@
+{
+  "name": "pomodoro-timer",
+  "version": "1.0.0",
+  "description": "一个现代化的番茄钟应用，帮助提高工作效率和专注力",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 3000",
+    "build": "echo 'No build process needed for static files'",
+    "serve": "npx http-server . -p 8080 -c-1"
+  },
+  "keywords": [
+    "pomodoro",
+    "timer",
+    "productivity",
+    "focus",
+    "番茄钟",
+    "专注",
+    "效率"
+  ],
+  "author": "Assistant",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/pomodoro-timer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/pomodoro-timer/issues"
+  },
+  "homepage": "https://github.com/yourusername/pomodoro-timer#readme",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

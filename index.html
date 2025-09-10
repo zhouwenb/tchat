@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>番茄钟 - Pomodoro Timer</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-clock"></i> 番茄钟</h1>
+            <p>专注工作，提高效率</p>
+        </header>
+
+        <div class="timer-container">
+            <div class="timer-circle">
+                <svg class="progress-ring" width="300" height="300">
+                    <circle class="progress-ring__circle" 
+                            stroke="rgba(255,255,255,0.1)" 
+                            stroke-width="8" 
+                            fill="transparent" 
+                            r="140" 
+                            cx="150" 
+                            cy="150"/>
+                    <circle class="progress-ring__progress" 
+                            stroke="#ff6b6b" 
+                            stroke-width="8" 
+                            fill="transparent" 
+                            r="140" 
+                            cx="150" 
+                            cy="150"/>
+                </svg>
+                <div class="timer-display">
+                    <div class="time" id="timeDisplay">25:00</div>
+                    <div class="session-type" id="sessionType">工作时间</div>
+                    <div class="session-count">
+                        <span>第 <span id="sessionCount">1</span> 个番茄</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="startBtn">
+                <i class="fas fa-play"></i>
+                开始
+            </button>
+            <button class="btn btn-secondary" id="pauseBtn" disabled>
+                <i class="fas fa-pause"></i>
+                暂停
+            </button>
+            <button class="btn btn-secondary" id="resetBtn">
+                <i class="fas fa-refresh"></i>
+                重置
+            </button>
+        </div>
+
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="work" data-time="25">
+                <i class="fas fa-briefcase"></i>
+                工作 (25分钟)
+            </button>
+            <button class="mode-btn" data-mode="shortBreak" data-time="5">
+                <i class="fas fa-coffee"></i>
+                短休息 (5分钟)
+            </button>
+            <button class="mode-btn" data-mode="longBreak" data-time="15">
+                <i class="fas fa-couch"></i>
+                长休息 (15分钟)
+            </button>
+        </div>
+
+        <div class="settings">
+            <div class="setting-group">
+                <label for="workTime">工作时间 (分钟):</label>
+                <input type="number" id="workTime" min="1" max="60" value="25">
+            </div>
+            <div class="setting-group">
+                <label for="shortBreakTime">短休息时间 (分钟):</label>
+                <input type="number" id="shortBreakTime" min="1" max="30" value="5">
+            </div>
+            <div class="setting-group">
+                <label for="longBreakTime">长休息时间 (分钟):</label>
+                <input type="number" id="longBreakTime" min="1" max="60" value="15">
+            </div>
+            <div class="setting-group">
+                <label for="soundEnabled">
+                    <input type="checkbox" id="soundEnabled" checked>
+                    启用声音提醒
+                </label>
+            </div>
+        </div>
+
+        <div class="stats">
+            <h3>今日统计</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number" id="completedPomodoros">0</div>
+                    <div class="stat-label">完成的番茄</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="totalFocusTime">0</div>
+                    <div class="stat-label">专注时间 (分钟)</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="totalBreakTime">0</div>
+                    <div class="stat-label">休息时间 (分钟)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        <div class="notification-content">
+            <i class="fas fa-bell"></i>
+            <span id="notificationText">时间到了！</span>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
