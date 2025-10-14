@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时比特币价格追踪器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+
+        .bitcoin-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #f7931a;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .price-display {
+            background: linear-gradient(135deg, #f7931a, #ff6b35);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 20px rgba(247, 147, 26, 0.3);
+        }
+
+        .price {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .change {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .change.positive {
+            color: #4ade80;
+        }
+
+        .change.negative {
+            color: #f87171;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.connected {
+            background: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+
+        .status.disconnected {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .last-update {
+            color: #666;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #f7931a;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .price {
+                font-size: 36px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="bitcoin-icon">₿</div>
+        <h1>实时比特币价格追踪器</h1>
+        
+        <div class="status disconnected" id="status">
+            <div class="loading"></div>
+            连接中...
+        </div>
+        
+        <div class="price-display">
+            <div class="price" id="price">$--,---</div>
+            <div class="change" id="change">---%</div>
+        </div>
+        
+        <div class="last-update" id="lastUpdate">
+            等待数据更新...
+        </div>
+    </div>
+
+    <script>
+        class BitcoinTracker {
+            constructor() {
+                this.ws = null;
+                this.reconnectInterval = 5000;
+                this.maxReconnectAttempts = 10;
+                this.reconnectAttempts = 0;
+                
+                this.priceElement = document.getElementById('price');
+                this.changeElement = document.getElementById('change');
+                this.statusElement = document.getElementById('status');
+                this.lastUpdateElement = document.getElementById('lastUpdate');
+                
+                this.connect();
+            }
+            
+            connect() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                
+                try {
+                    this.ws = new WebSocket(wsUrl);
+                    this.setupEventListeners();
+                } catch (error) {
+                    console.error('WebSocket 连接失败:', error);
+                    this.handleDisconnect();
+                }
+            }
+            
+            setupEventListeners() {
+                this.ws.onopen = () => {
+                    console.log('WebSocket 连接已建立');
+                    this.reconnectAttempts = 0;
+                    this.updateStatus(true);
+                };
+                
+                this.ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        this.updatePrice(data);
+                    } catch (error) {
+                        console.error('解析数据失败:', error);
+                    }
+                };
+                
+                this.ws.onclose = () => {
+                    console.log('WebSocket 连接已关闭');
+                    this.handleDisconnect();
+                };
+                
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket 错误:', error);
+                    this.handleDisconnect();
+                };
+            }
+            
+            updatePrice(data) {
+                // 添加脉冲动画
+                this.priceElement.classList.add('pulse');
+                setTimeout(() => {
+                    this.priceElement.classList.remove('pulse');
+                }, 1000);
+                
+                // 更新价格
+                this.priceElement.textContent = `$${data.price.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })}`;
+                
+                // 更新变化百分比
+                const change = data.change_24h;
+                const changeText = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+                this.changeElement.textContent = `24h: ${changeText}`;
+                this.changeElement.className = `change ${change >= 0 ? 'positive' : 'negative'}`;
+                
+                // 更新时间
+                const updateTime = new Date(data.timestamp).toLocaleString('zh-CN');
+                this.lastUpdateElement.textContent = `最后更新: ${updateTime}`;
+            }
+            
+            updateStatus(connected) {
+                if (connected) {
+                    this.statusElement.className = 'status connected';
+                    this.statusElement.innerHTML = '● 实时连接中';
+                } else {
+                    this.statusElement.className = 'status disconnected';
+                    this.statusElement.innerHTML = '<div class="loading"></div>重新连接中...';
+                }
+            }
+            
+            handleDisconnect() {
+                this.updateStatus(false);
+                
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    console.log(`尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    
+                    setTimeout(() => {
+                        this.connect();
+                    }, this.reconnectInterval);
+                } else {
+                    this.statusElement.innerHTML = '连接失败，请刷新页面';
+                }
+            }
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            new BitcoinTracker();
+        });
+    </script>
+</body>
+</html>
