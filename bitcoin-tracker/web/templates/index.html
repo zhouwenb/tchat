@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₿</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="bitcoin-icon">₿</span>
+                比特币价格追踪器
+            </h1>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot disconnected"></span>
+                <span class="status-text">连接中...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- 价格卡片 -->
+            <div class="price-card">
+                <div class="price-header">
+                    <h2>BTC/USDT</h2>
+                    <div class="last-updated" id="lastUpdated">更新中...</div>
+                </div>
+                
+                <div class="price-display">
+                    <div class="current-price" id="currentPrice">$0.00</div>
+                    <div class="price-change" id="priceChange">
+                        <span class="change-amount" id="changeAmount">+$0.00</span>
+                        <span class="change-percent" id="changePercent">(+0.00%)</span>
+                    </div>
+                </div>
+
+                <div class="price-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">24h 成交量</span>
+                        <span class="stat-value" id="volume24h">$0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 价格图表 -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3>价格趋势</h3>
+                    <div class="chart-controls">
+                        <button class="chart-btn active" data-period="1h">1小时</button>
+                        <button class="chart-btn" data-period="24h">24小时</button>
+                        <button class="chart-btn" data-period="7d">7天</button>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="priceChart" width="800" height="400"></canvas>
+                </div>
+            </div>
+
+            <!-- 市场信息 -->
+            <div class="market-info">
+                <div class="info-card">
+                    <h4>市场概况</h4>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">当前价格</span>
+                            <span class="info-value" id="marketPrice">$0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">24h 变化</span>
+                            <span class="info-value" id="marketChange">0.00%</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">24h 最高</span>
+                            <span class="info-value" id="high24h">$0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">24h 最低</span>
+                            <span class="info-value" id="low24h">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 比特币价格追踪器 | 数据来源: Binance API</p>
+        </footer>
+    </div>
+
+    <!-- 加载动画 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p>正在连接服务器...</p>
+    </div>
+
+    <!-- 错误提示 -->
+    <div class="error-toast" id="errorToast">
+        <span class="error-message" id="errorMessage"></span>
+        <button class="error-close" onclick="hideError()">×</button>
+    </div>
+
+    <script src="/static/js/chart.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
